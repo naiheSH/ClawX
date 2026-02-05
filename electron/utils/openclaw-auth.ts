@@ -242,6 +242,7 @@ export function setOpenClawDefaultModel(provider: string): void {
         baseUrl: providerCfg.baseUrl,
         api: providerCfg.api,
         apiKey: providerCfg.apiKeyEnv,
+        models: [],
       };
       console.log(`Configured models.providers.${provider} with baseUrl=${providerCfg.baseUrl}`);
     }
