@@ -174,17 +174,7 @@ export function Sidebar() {
             <ExternalLink className="h-3 w-3 ml-auto" />
           </Button>
         )}
-        
-        {/* Version */}
-        <button
-          onClick={handleVersionClick}
-          className={cn(
-            'w-full text-xs text-muted-foreground hover:text-foreground transition-colors',
-            sidebarCollapsed ? 'text-center' : 'px-3'
-          )}
-        >
-          {sidebarCollapsed ? `v${appVersion.split('.')[0]}` : `ClawX v${appVersion}`}
-        </button>
+
         
         {/* Collapse Toggle */}
         <Button
