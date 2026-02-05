@@ -22,6 +22,7 @@ const electronAPI = {
         'gateway:restart',
         'gateway:rpc',
         'gateway:health',
+        'gateway:getControlUiUrl',
         // OpenClaw
         'openclaw:status',
         'openclaw:isReady',

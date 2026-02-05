@@ -20,6 +20,8 @@ import {
   type ProviderConfig,
 } from '../utils/secure-storage';
 import { getOpenClawStatus } from '../utils/paths';
+import { getSetting } from '../utils/store';
+import { saveProviderKeyToOpenClaw } from '../utils/openclaw-auth';
 
 /**
  * Register all IPC handlers
@@ -99,6 +101,20 @@ function registerGatewayHandlers(
     try {
       const result = await gatewayManager.rpc(method, params, timeoutMs);
       return { success: true, result };
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+  
+  // Get the Control UI URL with token for embedding
+  ipcMain.handle('gateway:getControlUiUrl', async () => {
+    try {
+      const status = gatewayManager.getStatus();
+      const token = await getSetting('gatewayToken');
+      const port = status.port || 18789;
+      // Pass token as query param - Control UI will store it in localStorage
+      const url = `http://127.0.0.1:${port}/?token=${encodeURIComponent(token)}`;
+      return { success: true, url, port, token };
     } catch (error) {
       return { success: false, error: String(error) };
     }
@@ -203,6 +219,13 @@ function registerProviderHandlers(): void {
       // Store the API key if provided
       if (apiKey) {
         await storeApiKey(config.id, apiKey);
+        
+        // Also write to OpenClaw auth-profiles.json so the gateway can use it
+        try {
+          saveProviderKeyToOpenClaw(config.type, apiKey);
+        } catch (err) {
+          console.warn('Failed to save key to OpenClaw auth-profiles:', err);
+        }
       }
       
       return { success: true };
@@ -225,6 +248,17 @@ function registerProviderHandlers(): void {
   ipcMain.handle('provider:setApiKey', async (_, providerId: string, apiKey: string) => {
     try {
       await storeApiKey(providerId, apiKey);
+      
+      // Also write to OpenClaw auth-profiles.json
+      // Resolve provider type from stored config, or use providerId as type
+      const provider = await getProvider(providerId);
+      const providerType = provider?.type || providerId;
+      try {
+        saveProviderKeyToOpenClaw(providerType, apiKey);
+      } catch (err) {
+        console.warn('Failed to save key to OpenClaw auth-profiles:', err);
+      }
+      
       return { success: true };
     } catch (error) {
       return { success: false, error: String(error) };

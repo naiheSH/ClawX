@@ -2,7 +2,7 @@
  * Electron Main Process Entry
  * Manages window creation, system tray, and IPC handlers
  */
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
 import { join } from 'path';
 import { GatewayManager } from '../gateway/manager';
 import { registerIpcHandlers } from './ipc-handlers';
@@ -32,6 +32,7 @@ function createWindow(): BrowserWindow {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false,
+      webviewTag: true, // Enable <webview> for embedding OpenClaw Control UI
     },
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 16, y: 16 },
@@ -74,6 +75,28 @@ async function initialize(): Promise<void> {
   // Create system tray
   createTray(mainWindow);
 
+  // Override security headers for the OpenClaw Control UI webview
+  // The Control UI sets X-Frame-Options: DENY and CSP frame-ancestors 'none'
+  // which prevents embedding in an Electron webview
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const headers = { ...details.responseHeaders };
+    // Remove X-Frame-Options to allow embedding in webview
+    delete headers['X-Frame-Options'];
+    delete headers['x-frame-options'];
+    // Remove restrictive CSP frame-ancestors
+    if (headers['Content-Security-Policy']) {
+      headers['Content-Security-Policy'] = headers['Content-Security-Policy'].map(
+        (csp) => csp.replace(/frame-ancestors\s+'none'/g, "frame-ancestors 'self' *")
+      );
+    }
+    if (headers['content-security-policy']) {
+      headers['content-security-policy'] = headers['content-security-policy'].map(
+        (csp) => csp.replace(/frame-ancestors\s+'none'/g, "frame-ancestors 'self' *")
+      );
+    }
+    callback({ responseHeaders: headers });
+  });
+  
   // Register IPC handlers
   registerIpcHandlers(gatewayManager, mainWindow);
 

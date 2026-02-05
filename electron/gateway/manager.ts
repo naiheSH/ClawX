@@ -15,6 +15,8 @@ import {
   isOpenClawInstalled 
 } from '../utils/paths';
 import { getSetting } from '../utils/store';
+import { getApiKey } from '../utils/secure-storage';
+import { getProviderEnvVar } from '../utils/openclaw-auth';
 import { GatewayEventType, JsonRpcNotification, isNotification, isResponse } from './protocol';
 
 /**
@@ -370,6 +372,24 @@ export class GatewayManager extends EventEmitter {
     console.log(`Spawning Gateway: ${command} ${args.join(' ')}`);
     console.log(`Working directory: ${openclawDir}`);
     
+    // Load provider API keys from secure storage to pass as environment variables
+    const providerEnv: Record<string, string> = {};
+    const providerTypes = ['anthropic', 'openai', 'google', 'openrouter'];
+    for (const providerType of providerTypes) {
+      try {
+        const key = await getApiKey(providerType);
+        if (key) {
+          const envVar = getProviderEnvVar(providerType);
+          if (envVar) {
+            providerEnv[envVar] = key;
+            console.log(`Loaded API key for ${providerType} -> ${envVar}`);
+          }
+        }
+      } catch (err) {
+        console.warn(`Failed to load API key for ${providerType}:`, err);
+      }
+    }
+    
     return new Promise((resolve, reject) => {
       this.process = spawn(command, args, {
         cwd: openclawDir,
@@ -378,6 +398,8 @@ export class GatewayManager extends EventEmitter {
         shell: process.platform === 'win32', // Use shell on Windows for pnpm
         env: {
           ...process.env,
+          // Provider API keys
+          ...providerEnv,
           // Skip channel auto-connect during startup for faster boot
           OPENCLAW_SKIP_CHANNELS: '1',
           CLAWDBOT_SKIP_CHANNELS: '1',
@@ -407,9 +429,18 @@ export class GatewayManager extends EventEmitter {
         console.log('Gateway:', data.toString());
       });
       
-      // Log stderr
+      // Log stderr (filter out noisy control-ui token_mismatch messages)
       this.process.stderr?.on('data', (data) => {
-        console.error('Gateway error:', data.toString());
+        const msg = data.toString();
+        // Suppress the constant Control UI token_mismatch noise
+        // These come from the browser-based Control UI auto-polling with no token
+        if (msg.includes('openclaw-control-ui') && msg.includes('token_mismatch')) {
+          return;
+        }
+        if (msg.includes('closed before connect') && msg.includes('token mismatch')) {
+          return;
+        }
+        console.error('Gateway error:', msg);
       });
       
       // Store PID
@@ -516,7 +547,7 @@ export class GatewayManager extends EventEmitter {
         }, 10000);
         
         this.pendingRequests.set(connectId, {
-          resolve: (result) => {
+          resolve: (_result) => {
             clearTimeout(connectTimeout);
             handshakeComplete = true;
             console.log('WebSocket handshake complete, gateway connected');

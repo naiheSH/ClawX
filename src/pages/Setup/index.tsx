@@ -551,7 +551,24 @@ function ProviderContent({
       setKeyValid(result.valid);
       
       if (result.valid) {
-        toast.success('API key validated successfully');
+        // Save the API key to both ClawX secure storage and OpenClaw auth-profiles
+        try {
+          await window.electron.ipcRenderer.invoke(
+            'provider:save',
+            {
+              id: selectedProvider,
+              name: selectedProviderData?.name || selectedProvider,
+              type: selectedProvider,
+              enabled: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+            apiKey
+          );
+        } catch (saveErr) {
+          console.warn('Failed to persist API key:', saveErr);
+        }
+        toast.success('API key validated and saved');
       } else {
         toast.error(result.error || 'Invalid API key');
       }
