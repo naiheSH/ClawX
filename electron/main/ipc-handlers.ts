@@ -995,6 +995,19 @@ function registerProviderHandlers(): void {
         }
       }
 
+      // Restart Gateway so the new API keys are injected as env vars.
+      // The Gateway may have started before the user configured any keys.
+      try {
+        if (gatewayManager.getStatus().status === 'running') {
+          logger.info('Restarting Gateway after provider:setDefault to inject API keys');
+          gatewayManager.restart().catch((err) => {
+            logger.warn('Gateway restart after setDefault failed:', err);
+          });
+        }
+      } catch (err) {
+        logger.warn('Failed to trigger Gateway restart after setDefault:', err);
+      }
+
       return { success: true };
     } catch (error) {
       return { success: false, error: String(error) };
