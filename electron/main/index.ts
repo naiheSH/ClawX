@@ -4,7 +4,7 @@
  */
 import { app, BrowserWindow, nativeImage, session, shell } from 'electron';
 import { join } from 'path';
-import { mkdirSync } from 'fs';
+import { mkdirSync, existsSync, cpSync, writeFileSync, unlinkSync } from 'fs';
 import { GatewayManager } from '../gateway/manager';
 import { registerIpcHandlers } from './ipc-handlers';
 import { createTray } from './tray';
@@ -19,32 +19,51 @@ import { ClawHubService } from '../gateway/clawhub';
 // For packaged app, store user data next to the executable
 // instead of %APPDATA% to avoid path encoding issues with non-ASCII usernames
 if (app.isPackaged) {
+  const defaultUserData = app.getPath('userData'); // %APPDATA%/ClawX (before redirect)
   const exeDir = join(app.getPath('exe'), '..');
   const portableDataDir = join(exeDir, 'data');
-  let redirected = false;
+  let newUserData: string | null = null;
+
   try {
     mkdirSync(portableDataDir, { recursive: true });
     // Write test to verify the directory is actually writable
     const testFile = join(portableDataDir, '.write-test');
-    require('fs').writeFileSync(testFile, '', 'utf-8');
-    require('fs').unlinkSync(testFile);
-    app.setPath('userData', portableDataDir);
-    redirected = true;
+    writeFileSync(testFile, '', 'utf-8');
+    unlinkSync(testFile);
+    newUserData = portableDataDir;
   } catch {
     // Program Files may not be writable, fall back
   }
-  if (!redirected) {
+
+  if (!newUserData) {
     // Use LOCALAPPDATA as fallback (avoids non-ASCII issues in APPDATA/Roaming path)
     const localAppData = process.env.LOCALAPPDATA;
     if (localAppData) {
       const fallbackDir = join(localAppData, 'ClawX-Data');
       try {
         mkdirSync(fallbackDir, { recursive: true });
-        app.setPath('userData', fallbackDir);
+        newUserData = fallbackDir;
       } catch {
         // Final fallback: default Electron userData
       }
     }
+  }
+
+  if (newUserData) {
+    // Migrate data from default %APPDATA%/ClawX on first redirect
+    // so upgrades from older versions don't lose config / setup state
+    if (newUserData !== defaultUserData) {
+      const hasOldData = existsSync(join(defaultUserData, 'Local Storage'));
+      const hasNewData = existsSync(join(newUserData, 'Local Storage'));
+      if (hasOldData && !hasNewData) {
+        try {
+          cpSync(defaultUserData, newUserData, { recursive: true, force: false });
+        } catch {
+          // Migration failed, user will see setup wizard again
+        }
+      }
+    }
+    app.setPath('userData', newUserData);
   }
 }
 
