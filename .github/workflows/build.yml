@@ -19,10 +19,20 @@ jobs:
         include:
           - os: windows-latest
             platform: win
-            artifact: ClawX-Windows
+            arch: --x64
+            artifact: ClawX-Windows-x64
+          - os: windows-latest
+            platform: win
+            arch: --arm64
+            artifact: ClawX-Windows-arm64
           - os: ubuntu-latest
             platform: linux
-            artifact: ClawX-Linux
+            arch: --x64
+            artifact: ClawX-Linux-x64
+          - os: ubuntu-latest
+            platform: linux
+            arch: --arm64
+            artifact: ClawX-Linux-arm64
 
     runs-on: ${{ matrix.os }}
 
@@ -59,14 +69,20 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
 
-      - name: Build & Package
+      - name: Build frontend & bundle
+        run: |
+          pnpm run build:vite
+          npx zx scripts/bundle-openclaw.mjs
+          npx zx scripts/bundle-plugins.mjs
+
+      - name: Package
         env:
           # Windows code signing (set these secrets in GitHub repo settings)
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           # GitHub token for publish
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm run package:${{ matrix.platform }}
+        run: npx electron-builder --${{ matrix.platform }} ${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
