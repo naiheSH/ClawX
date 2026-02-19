@@ -126,11 +126,13 @@
     },
     "about": {
         "title": "About",
+        "edition": "ClawX & Hi Light Special Edition",
         "appName": "ClawX",
         "tagline": "Graphical AI Assistant",
         "basedOn": "Based on OpenClaw",
         "version": "Version {{version}}",
         "docs": "Website",
+        "hilight": "Hi Light Website",
         "github": "GitHub"
     }
 }

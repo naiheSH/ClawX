@@ -114,6 +114,10 @@ nsis:
 
 # Linux Configuration
 linux:
+  executableName: clawx
+  extraResources:
+    - from: resources/bin/linux-${arch}
+      to: bin
   icon: resources/icons
   target:
     - AppImage
@@ -128,11 +132,11 @@ linux:
     OpenClaw Gateway to provide intelligent automation and assistance
     across multiple messaging platforms.
   desktop:
-    entry:
-      Name: ClawX
-      Comment: AI Assistant powered by OpenClaw
-      Categories: Utility;Network;
-      Keywords: ai;assistant;automation;chat;
+    Name: ClawX
+    Icon: clawx
+    Comment: AI Assistant powered by OpenClaw
+    Categories: Utility;Network;
+    Keywords: ai;assistant;automation;chat;
 
 appImage:
   license: LICENSE

@@ -545,6 +545,9 @@ export function Settings() {
           <CardTitle>{t('about.title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p className="text-base font-semibold text-foreground">
+            {t('about.edition')}
+          </p>
           <p>
             <strong>{t('about.appName')}</strong> - {t('about.tagline')}
           </p>
@@ -554,16 +557,23 @@ export function Settings() {
             <Button
               variant="link"
               className="h-auto p-0"
-              onClick={() => window.electron.openExternal('https://claw-x.com')}
+              onClick={() => window.electron.openExternal('https://guangfan.com/')}
             >
-              {t('about.docs')}
+              {t('about.hilight')}
             </Button>
             <Button
               variant="link"
               className="h-auto p-0"
-              onClick={() => window.electron.openExternal('https://github.com/ValueCell-ai/ClawX')}
+              onClick={() => window.electron.openExternal('https://github.com/guangfangongjian/ClawX')}
             >
               {t('about.github')}
+            </Button>
+            <Button
+              variant="link"
+              className="h-auto p-0"
+              onClick={() => window.electron.openExternal('https://claw-x.com')}
+            >
+              {t('about.docs')}
             </Button>
           </div>
         </CardContent>
