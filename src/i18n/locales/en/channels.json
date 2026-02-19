@@ -13,6 +13,10 @@
     "availableDesc": "Connect a new channel",
     "showAll": "Show All",
     "pluginBadge": "Plugin",
+    "configured": "Configured Channels",
+    "configuredDesc": "Your active channel connections",
+    "configuredBadge": "Configured",
+    "deleteConfirm": "Are you sure you want to delete this channel?",
     "toast": {
         "whatsappConnected": "WhatsApp connected successfully",
         "whatsappFailed": "WhatsApp connection failed: {{error}}",
@@ -257,6 +261,28 @@
                 "Go to Mattermost Integrations",
                 "Create a new Bot Account",
                 "Copy the access token"
+            ]
+        },
+        "hi-light": {
+            "description": "Connect HiLight WebSocket bridge channel",
+            "docsUrl": "https://github.com/Gongcong/hi-light-plugin",
+            "fields": {
+                "wsUrl": {
+                    "label": "WebSocket URL",
+                    "placeholder": "wss://open.guangfan.com/open-apis/device-agent/v1/websocket",
+                    "description": "Base WebSocket URL. The plugin appends a UUID path segment on every connection."
+                },
+                "authToken": {
+                    "label": "Auth Token (API Key)",
+                    "placeholder": "Your HiLight API Key",
+                    "description": "Token sent in the Authorization header during WebSocket handshake."
+                }
+            },
+            "instructions": [
+                "Download the HiLight App from your app store",
+                "Go to Settings > Account > Get API Key",
+                "Enter the WebSocket URL and API Key below",
+                "Restart the gateway after saving"
             ]
         }
     },

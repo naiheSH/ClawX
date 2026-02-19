@@ -46,6 +46,7 @@ import { checkUvInstalled, installUv, setupManagedPython } from '../utils/uv-set
 import { updateSkillConfig, getSkillConfig, getAllSkillConfigs } from '../utils/skill-config';
 import { whatsAppLoginManager } from '../utils/whatsapp-login';
 import { getProviderConfig } from '../utils/provider-registry';
+import { installBundledPlugin, isPluginInstalled } from '../utils/plugin-install';
 
 /**
  * Register all IPC handlers
@@ -96,6 +97,9 @@ export function registerIpcHandlers(
 
   // File staging handlers (upload/send separation)
   registerFileHandlers();
+
+  // Plugin install handlers
+  registerPluginHandlers();
 }
 
 /**
@@ -634,10 +638,24 @@ function registerOpenClawHandlers(): void {
 
   // ==================== Channel Configuration Handlers ====================
 
+  // Channels that require a bundled plugin to be installed
+  const PLUGIN_CHANNELS = ['hi-light'];
+
   // Save channel configuration
   ipcMain.handle('channel:saveConfig', async (_, channelType: string, config: Record<string, unknown>) => {
     try {
       logger.info('channel:saveConfig', { channelType, keys: Object.keys(config || {}) });
+
+      // Auto-install bundled plugin if this channel requires one
+      if (PLUGIN_CHANNELS.includes(channelType) && !isPluginInstalled(channelType)) {
+        logger.info(`Auto-installing bundled plugin for channel: ${channelType}`);
+        const installResult = installBundledPlugin(channelType);
+        if (!installResult.success) {
+          logger.error(`Plugin install failed for ${channelType}:`, installResult.error);
+          return { success: false, error: `Plugin installation failed: ${installResult.error}` };
+        }
+      }
+
       saveChannelConfig(channelType, config);
       return { success: true };
     } catch (error) {
@@ -1642,5 +1660,24 @@ function registerFileHandlers(): void {
       }
     }
     return results;
+  });
+}
+
+/**
+ * Plugin installation IPC handlers
+ */
+function registerPluginHandlers(): void {
+  // Install a bundled OpenClaw plugin
+  ipcMain.handle('plugin:install', async (_, pluginId: string) => {
+    try {
+      return installBundledPlugin(pluginId);
+    } catch (error) {
+      return { success: false, error: String(error) };
+    }
+  });
+
+  // Check if a plugin is installed
+  ipcMain.handle('plugin:isInstalled', async (_, pluginId: string) => {
+    return isPluginInstalled(pluginId);
   });
 }

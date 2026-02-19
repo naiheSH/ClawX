@@ -17,7 +17,8 @@ export type ChannelType =
   | 'line'
   | 'msteams'
   | 'googlechat'
-  | 'mattermost';
+  | 'mattermost'
+  | 'hi-light';
 
 /**
  * Channel connection status
@@ -88,6 +89,7 @@ export const CHANNEL_ICONS: Record<ChannelType, string> = {
   msteams: '👔',
   googlechat: '💭',
   mattermost: '💠',
+  'hi-light': '💡',
 };
 
 /**
@@ -105,6 +107,7 @@ export const CHANNEL_NAMES: Record<ChannelType, string> = {
   msteams: 'Microsoft Teams',
   googlechat: 'Google Chat',
   mattermost: 'Mattermost',
+  'hi-light': 'HiLight',
 };
 
 /**
@@ -435,13 +438,46 @@ export const CHANNEL_META: Record<ChannelType, ChannelMeta> = {
     ],
     isPlugin: true,
   },
+  'hi-light': {
+    id: 'hi-light',
+    name: 'HiLight',
+    icon: '💡',
+    description: 'channels:meta.hi-light.description',
+    connectionType: 'token',
+    docsUrl: 'channels:meta.hi-light.docsUrl',
+    configFields: [
+      {
+        key: 'wsUrl',
+        label: 'channels:meta.hi-light.fields.wsUrl.label',
+        type: 'text',
+        placeholder: 'channels:meta.hi-light.fields.wsUrl.placeholder',
+        required: true,
+        description: 'channels:meta.hi-light.fields.wsUrl.description',
+      },
+      {
+        key: 'authToken',
+        label: 'channels:meta.hi-light.fields.authToken.label',
+        type: 'password',
+        placeholder: 'channels:meta.hi-light.fields.authToken.placeholder',
+        required: true,
+        description: 'channels:meta.hi-light.fields.authToken.description',
+      },
+    ],
+    instructions: [
+      'channels:meta.hi-light.instructions.0',
+      'channels:meta.hi-light.instructions.1',
+      'channels:meta.hi-light.instructions.2',
+      'channels:meta.hi-light.instructions.3',
+    ],
+    isPlugin: true,
+  },
 };
 
 /**
  * Get primary supported channels (non-plugin, commonly used)
  */
 export function getPrimaryChannels(): ChannelType[] {
-  return ['telegram', 'discord', 'whatsapp', 'feishu'];
+  return ['telegram', 'discord', 'whatsapp', 'feishu', 'hi-light'];
 }
 
 /**

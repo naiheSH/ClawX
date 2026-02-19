@@ -13,6 +13,10 @@
     "availableDesc": "连接一个新的频道",
     "showAll": "显示全部",
     "pluginBadge": "插件",
+    "configured": "已配置频道",
+    "configuredDesc": "您的活跃频道连接",
+    "configuredBadge": "已配置",
+    "deleteConfirm": "确定要删除此频道吗？",
     "toast": {
         "whatsappConnected": "WhatsApp 连接成功",
         "whatsappFailed": "WhatsApp 连接失败: {{error}}",
@@ -106,7 +110,7 @@
             "docsUrl": "https://docs.openclaw.ai/zh-CN/channels/whatsapp",
             "instructions": [
                 "在手机上打开 WhatsApp",
-                "前往 设置 > 已关联设备 >包含连接设备",
+                "前往 设置 > 已关联设备 > 连接设备",
                 "扫描下方显示的二维码",
                 "系统将自动识别您的手机号"
             ]
@@ -257,6 +261,28 @@
                 "前往 Mattermost 集成",
                 "创建一个新的 Bot 账户",
                 "复制访问令牌"
+            ]
+        },
+        "hi-light": {
+            "description": "连接 HiLight WebSocket 桥接频道",
+            "docsUrl": "https://github.com/Gongcong/hi-light-plugin",
+            "fields": {
+                "wsUrl": {
+                    "label": "WebSocket 地址",
+                    "placeholder": "wss://open.guangfan.com/open-apis/device-agent/v1/websocket",
+                    "description": "基础 WebSocket 地址。插件会在每次连接时自动追加 UUID 路径。"
+                },
+                "authToken": {
+                    "label": "认证令牌 (API Key)",
+                    "placeholder": "您的 HiLight API Key",
+                    "description": "在 WebSocket 握手时通过 Authorization 头发送的令牌。"
+                }
+            },
+            "instructions": [
+                "在各大应用商店下载 HiLight App",
+                "点击设置 → 帐号管理 → 获取 API KEY",
+                "在下方输入 WebSocket 地址和 API Key",
+                "保存后重启网关生效"
             ]
         }
     },

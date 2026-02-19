@@ -70,9 +70,7 @@ export async function isPythonReady(): Promise<boolean> {
 
   return new Promise<boolean>((resolve) => {
     try {
-      const child = spawn(uvBin, ['python', 'find', '3.12'], {
-        shell: process.platform === 'win32',
-      });
+      const child = spawn(uvBin, ['python', 'find', '3.12']);
       child.on('close', (code) => resolve(code === 0));
       child.on('error', () => resolve(false));
     } catch {
@@ -101,7 +99,6 @@ export async function setupManagedPython(): Promise<void> {
 
   await new Promise<void>((resolve, reject) => {
     const child = spawn(uvBin, ['python', 'install', '3.12'], {
-      shell: process.platform === 'win32',
       env: {
         ...process.env,
         ...uvEnv,
@@ -129,7 +126,6 @@ export async function setupManagedPython(): Promise<void> {
   try {
     const findPath = await new Promise<string>((resolve) => {
       const child = spawn(uvBin, ['python', 'find', '3.12'], {
-        shell: process.platform === 'win32',
         env: {
           ...process.env,
           ...uvEnv,

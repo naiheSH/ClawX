@@ -25,6 +25,9 @@ extraResources:
   # because electron-builder respects .gitignore which excludes node_modules/)
   - from: build/openclaw/
     to: openclaw/
+  # Bundled OpenClaw plugins (copied to ~/.openclaw/extensions/ at runtime)
+  - from: build/plugins/
+    to: plugins/
 
 afterPack: ./scripts/after-pack.cjs
 

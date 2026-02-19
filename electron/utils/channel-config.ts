@@ -406,6 +406,8 @@ export async function validateChannelCredentials(
             return validateDiscordCredentials(config);
         case 'telegram':
             return validateTelegramCredentials(config);
+        case 'hi-light':
+            return validateHiLightCredentials(config);
         default:
             // For channels without specific validation, just check required fields are present
             return { valid: true, errors: [], warnings: ['No online validation available for this channel type.'] };
@@ -568,7 +570,48 @@ async function validateTelegramCredentials(
     }
 }
 
+/**
+ * Validate HiLight WebSocket bridge credentials
+ */
+async function validateHiLightCredentials(
+    config: Record<string, string>
+): Promise<CredentialValidationResult> {
+    const wsUrl = config.wsUrl?.trim();
+    const authToken = config.authToken?.trim();
 
+    if (!wsUrl) {
+        return { valid: false, errors: ['WebSocket URL is required'], warnings: [] };
+    }
+
+    if (!authToken) {
+        return { valid: false, errors: ['Auth Token (API Key) is required'], warnings: [] };
+    }
+
+    // Validate URL format
+    try {
+        const parsed = new URL(wsUrl);
+        if (parsed.protocol !== 'wss:' && parsed.protocol !== 'ws:') {
+            return {
+                valid: false,
+                errors: ['WebSocket URL must start with wss:// or ws://'],
+                warnings: [],
+            };
+        }
+    } catch {
+        return {
+            valid: false,
+            errors: ['Invalid WebSocket URL format'],
+            warnings: [],
+        };
+    }
+
+    return {
+        valid: true,
+        errors: [],
+        warnings: [],
+        details: { wsUrl },
+    };
+}
 
 /**
  * Validate channel configuration using OpenClaw doctor

@@ -247,6 +247,28 @@
                 "新しい Bot アカウントを作成します",
                 "アクセストークンをコピーします"
             ]
+        },
+        "hi-light": {
+            "description": "HiLight WebSocket ブリッジチャンネルに接続します",
+            "docsUrl": "https://github.com/Gongcong/hi-light-plugin",
+            "fields": {
+                "wsUrl": {
+                    "label": "WebSocket URL",
+                    "placeholder": "wss://open.guangfan.com/open-apis/device-agent/v1/websocket",
+                    "description": "ベース WebSocket URL。プラグインは接続ごとに UUID パスセグメントを追加します。"
+                },
+                "authToken": {
+                    "label": "認証トークン (API Key)",
+                    "placeholder": "HiLight API Key",
+                    "description": "WebSocket ハンドシェイク時に Authorization ヘッダーで送信されるトークン。"
+                }
+            },
+            "instructions": [
+                "アプリストアから HiLight App をダウンロードします",
+                "設定 → アカウント管理 → API KEY を取得します",
+                "以下に WebSocket URL と API Key を入力します",
+                "保存後、ゲートウェイを再起動して反映させます"
+            ]
         }
     },
     "viewDocs": "ドキュメントを表示"

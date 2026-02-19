@@ -62,3 +62,7 @@ build/
 
 .cursor/
 .pnpm-store/
+codechat/
+.windsurfrules
+uv_stderr.txt
+uv_stdout.txt

@@ -29,6 +29,7 @@ import {
   buildDeviceAuthPayload,
   type DeviceIdentity,
 } from '../utils/device-identity';
+import { ensureRequiredPlugins } from '../utils/plugin-install';
 
 /**
  * Gateway connection status
@@ -244,6 +245,9 @@ export class GatewayManager extends EventEmitter {
       }
       
       logger.debug('No existing Gateway found, starting new process...');
+
+      // Ensure required plugins are installed before starting Gateway
+      await ensureRequiredPlugins();
       
       // Start new Gateway process
       await this.startProcess();
