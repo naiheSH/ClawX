@@ -169,17 +169,20 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
   },
 
   exploreSkills: async () => {
+    console.log('[exploreSkills] called');
     set({ searching: true, searchError: null, searchResults: [] });
     try {
       const result = await window.electron.ipcRenderer.invoke('clawhub:explore', {}) as {
         success: boolean; items?: MarketplaceSkill[]; nextCursor?: string | null; error?: string;
       };
+      console.log('[exploreSkills] IPC result:', { success: result.success, itemCount: result.items?.length, nextCursor: result.nextCursor?.substring(0, 30), error: result.error });
       if (result.success) {
         set({ searchResults: result.items || [], marketplaceNextCursor: result.nextCursor || null });
       } else {
         throw new Error(result.error || 'Explore failed');
       }
     } catch (error) {
+      console.error('[exploreSkills] error:', error);
       set({ searchError: String(error) });
     } finally {
       set({ searching: false });

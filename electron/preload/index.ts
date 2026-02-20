@@ -98,6 +98,7 @@ const electronAPI = {
         'channel:cancelWhatsAppQr',
         // ClawHub
         'clawhub:search',
+        'clawhub:explore',
         'clawhub:install',
         'clawhub:uninstall',
         'clawhub:list',

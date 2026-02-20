@@ -240,6 +240,7 @@ export class ClawHubService {
         }
 
         try {
+            console.log('[exploreApi] Fetching:', url.toString());
             const res = await fetch(url.toString());
             if (!res.ok) {
                 throw new Error(`HTTP ${res.status}: ${res.statusText}`);
@@ -255,6 +256,8 @@ export class ClawHubService {
                 nextCursor: string | null;
             };
 
+            console.log('[exploreApi] items:', data.items?.length, 'nextCursor:', data.nextCursor ? data.nextCursor.substring(0, 30) + '...' : null);
+
             const items: ClawHubSkillResult[] = data.items.map(item => ({
                 slug: item.slug,
                 name: item.slug,
@@ -264,7 +267,7 @@ export class ClawHubService {
 
             return { items, nextCursor: data.nextCursor };
         } catch (error) {
-            console.error('ClawHub API explore error:', error);
+            console.error('[exploreApi] error:', error);
             return { items: [], nextCursor: null };
         }
     }
