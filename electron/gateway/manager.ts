@@ -309,22 +309,36 @@ export class GatewayManager extends EventEmitter {
       this.ws = null;
     }
     
-    // Kill process
+    // Kill process and wait for it to actually exit (so the port is released)
     if (this.process && this.ownsProcess) {
       const child = this.process;
+      this.process = null;
       logger.info(`Sending SIGTERM to Gateway (pid=${child.pid ?? 'unknown'})`);
       child.kill('SIGTERM');
-      // Force kill after timeout
-      setTimeout(() => {
-        if (child.exitCode === null) {
-          logger.warn(`Gateway did not exit in time, sending SIGKILL (pid=${child.pid ?? 'unknown'})`);
-          child.kill('SIGKILL');
+
+      // Wait for the process to exit, with a SIGKILL fallback
+      await new Promise<void>((resolve) => {
+        const killTimer = setTimeout(() => {
+          if (child.exitCode === null && child.signalCode === null) {
+            logger.warn(`Gateway did not exit in time, sending SIGKILL (pid=${child.pid ?? 'unknown'})`);
+            try { child.kill('SIGKILL'); } catch { /* already dead */ }
+          }
+        }, 3000);
+
+        const done = () => {
+          clearTimeout(killTimer);
+          resolve();
+        };
+
+        // If the process already exited before we got here
+        if (child.exitCode !== null || child.signalCode !== null) {
+          done();
+          return;
         }
-        if (this.process === child) {
-          this.process = null;
-        }
-      }, 5000);
-      this.process = null;
+        child.once('exit', done);
+        // Safety cap: resolve after 6s even if exit event never fires
+        setTimeout(done, 6000);
+      });
     }
     this.ownsProcess = false;
     
