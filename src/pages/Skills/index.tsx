@@ -563,11 +563,10 @@ export function Skills() {
     return () => clearTimeout(timer);
   }, [isGatewayRunning]);
 
-  // Fetch skills on mount
+  // Fetch skills on mount and whenever Gateway status changes.
+  // clawhub:list works without Gateway, so always fetch to show installed skills.
   useEffect(() => {
-    if (isGatewayRunning) {
-      fetchSkills();
-    }
+    fetchSkills();
   }, [fetchSkills, isGatewayRunning]);
 
   // Filter skills

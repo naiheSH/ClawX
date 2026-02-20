@@ -268,26 +268,64 @@ export class ClawHubService {
      * List installed skills
      */
     async listInstalled(): Promise<Array<{ slug: string; version: string }>> {
+        let results: Array<{ slug: string; version: string }> = [];
+
+        // 1. Try CLI list command
         try {
             const output = await this.runCommand(['list']);
-            if (!output || output.includes('No installed skills')) {
-                return [];
+            if (output && !output.includes('No installed skills')) {
+                const lines = output.split('\n').filter(l => l.trim());
+                results = lines.map(line => {
+                    const cleanLine = this.stripAnsi(line);
+                    const match = cleanLine.match(/^(\S+)\s+v?(\d+\.\S+)/);
+                    if (match) {
+                        return {
+                            slug: match[1],
+                            version: match[2],
+                        };
+                    }
+                    return null;
+                }).filter((s): s is { slug: string; version: string } => s !== null);
             }
-
-            const lines = output.split('\n').filter(l => l.trim());
-            return lines.map(line => {
-                const cleanLine = this.stripAnsi(line);
-                const match = cleanLine.match(/^(\S+)\s+v?(\d+\.\S+)/);
-                if (match) {
-                    return {
-                        slug: match[1],
-                        version: match[2],
-                    };
-                }
-                return null;
-            }).filter((s): s is { slug: string; version: string } => s !== null);
         } catch (error) {
             console.error('ClawHub list error:', error);
+        }
+
+        // 2. Filesystem fallback: scan skills directory when CLI returns empty
+        if (results.length === 0) {
+            results = this.listInstalledFromDisk();
+        }
+
+        return results;
+    }
+
+    /**
+     * Scan the skills directory on disk to find installed skills.
+     * Used as fallback when the CLI list command returns empty.
+     */
+    private listInstalledFromDisk(): Array<{ slug: string; version: string }> {
+        const skillsDir = path.join(this.workDir, 'skills');
+        if (!fs.existsSync(skillsDir)) return [];
+
+        try {
+            const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
+            return entries
+                .filter(e => e.isDirectory())
+                .map(e => {
+                    let version = 'unknown';
+                    // Try reading version from package.json
+                    const pkgPath = path.join(skillsDir, e.name, 'package.json');
+                    if (fs.existsSync(pkgPath)) {
+                        try {
+                            const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+                            if (pkg.version) version = pkg.version;
+                        } catch { /* ignore */ }
+                    }
+                    return { slug: e.name, version };
+                })
+                .filter(s => s.slug !== '.clawhub'); // exclude metadata dir
+        } catch (error) {
+            console.error('listInstalledFromDisk error:', error);
             return [];
         }
     }
