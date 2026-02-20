@@ -27,6 +27,7 @@ import {
   Key,
   ChevronDown,
   FolderOpen,
+  ChevronLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -542,6 +543,8 @@ export function Skills() {
   const [activeTab, setActiveTab] = useState('all');
   const [selectedSource, setSelectedSource] = useState<'all' | 'built-in' | 'marketplace'>('all');
   const marketplaceDiscoveryAttemptedRef = useRef(false);
+  const [marketplacePage, setMarketplacePage] = useState(1);
+  const MARKETPLACE_PAGE_SIZE = 24;
 
   const isGatewayRunning = gatewayStatus.state === 'running';
   const [showGatewayWarning, setShowGatewayWarning] = useState(false);
@@ -639,12 +642,14 @@ export function Skills() {
   // Handle marketplace search
   const handleMarketplaceSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
+    setMarketplacePage(1);
     searchSkills(marketplaceQuery);
   }, [marketplaceQuery, searchSkills]);
 
   // Auto-reset when query is cleared
   useEffect(() => {
     if (activeTab === 'marketplace' && marketplaceQuery === '' && marketplaceDiscoveryAttemptedRef.current) {
+      setMarketplacePage(1);
       searchSkills('');
     }
   }, [marketplaceQuery, activeTab, searchSkills]);
@@ -977,21 +982,60 @@ export function Skills() {
             )}
 
             {searchResults.length > 0 ? (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {searchResults.map((skill) => {
-                  const isInstalled = skills.some(s => s.id === skill.slug || s.slug === skill.slug);
-                  return (
-                    <MarketplaceSkillCard
-                      key={skill.slug}
-                      skill={skill}
-                      isInstalling={!!installing[skill.slug]}
-                      isInstalled={isInstalled}
-                      onInstall={() => handleInstall(skill.slug)}
-                      onUninstall={() => handleUninstall(skill.slug)}
-                    />
-                  );
-                })}
-              </div>
+              <>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {searchResults
+                    .slice((marketplacePage - 1) * MARKETPLACE_PAGE_SIZE, marketplacePage * MARKETPLACE_PAGE_SIZE)
+                    .map((skill) => {
+                      const isInstalled = skills.some(s => s.id === skill.slug || s.slug === skill.slug);
+                      return (
+                        <MarketplaceSkillCard
+                          key={skill.slug}
+                          skill={skill}
+                          isInstalling={!!installing[skill.slug]}
+                          isInstalled={isInstalled}
+                          onInstall={() => handleInstall(skill.slug)}
+                          onUninstall={() => handleUninstall(skill.slug)}
+                        />
+                      );
+                    })}
+                </div>
+                {/* Pagination */}
+                {searchResults.length > MARKETPLACE_PAGE_SIZE && (
+                  <div className="flex items-center justify-center gap-2 pt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={marketplacePage <= 1}
+                      onClick={() => setMarketplacePage(p => Math.max(1, p - 1))}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    {Array.from({ length: Math.ceil(searchResults.length / MARKETPLACE_PAGE_SIZE) }, (_, i) => i + 1).map(page => (
+                      <Button
+                        key={page}
+                        variant={page === marketplacePage ? 'default' : 'outline'}
+                        size="sm"
+                        className="min-w-[2rem]"
+                        onClick={() => setMarketplacePage(page)}
+                      >
+                        {page}
+                      </Button>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={marketplacePage >= Math.ceil(searchResults.length / MARKETPLACE_PAGE_SIZE)}
+                      onClick={() => setMarketplacePage(p => p + 1)}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm text-muted-foreground ml-2">
+                      {searchResults.length} {t('marketplace.totalSkills', { defaultValue: 'skills' })}
+                    </span>
+                  </div>
+                )}
+              </>
             ) : (
               <Card>
                 <CardContent className="flex flex-col items-center justify-center py-12">
