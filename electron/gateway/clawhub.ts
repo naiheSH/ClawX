@@ -232,7 +232,15 @@ export class ClawHubService {
             args.push('--force');
         }
 
-        await this.runCommand(args);
+        const output = await this.runCommand(args);
+        console.log(`ClawHub install output for ${params.slug}:`, output);
+
+        // Verify the skill directory was actually created
+        const skillDir = path.join(this.workDir, 'skills', params.slug);
+        if (!fs.existsSync(skillDir)) {
+            console.error(`Skill install verification failed: directory not found at ${skillDir}`);
+            throw new Error(`Install appeared to succeed but skill directory was not created. The skill "${params.slug}" may not be available on the registry.`);
+        }
     }
 
     /**
