@@ -1015,17 +1015,35 @@ export function Skills() {
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
-                    {Array.from({ length: Math.ceil(searchResults.length / MARKETPLACE_PAGE_SIZE) }, (_, i) => i + 1).map(page => (
-                      <Button
-                        key={page}
-                        variant={page === marketplacePage ? 'default' : 'outline'}
-                        size="sm"
-                        className="min-w-[2rem]"
-                        onClick={() => setMarketplacePage(page)}
-                      >
-                        {page}
-                      </Button>
-                    ))}
+                    {(() => {
+                      const totalPages = Math.ceil(searchResults.length / MARKETPLACE_PAGE_SIZE);
+                      const pages: (number | string)[] = [];
+                      const cur = marketplacePage;
+                      if (totalPages <= 7) {
+                        for (let i = 1; i <= totalPages; i++) pages.push(i);
+                      } else {
+                        pages.push(1);
+                        if (cur > 3) pages.push('…L');
+                        for (let i = Math.max(2, cur - 1); i <= Math.min(totalPages - 1, cur + 1); i++) pages.push(i);
+                        if (cur < totalPages - 2) pages.push('…R');
+                        pages.push(totalPages);
+                      }
+                      return pages.map((p) =>
+                        typeof p === 'string' ? (
+                          <span key={p} className="px-1 text-sm text-muted-foreground">…</span>
+                        ) : (
+                          <Button
+                            key={p}
+                            variant={p === marketplacePage ? 'default' : 'outline'}
+                            size="sm"
+                            className="min-w-[2rem]"
+                            onClick={() => setMarketplacePage(p)}
+                          >
+                            {p}
+                          </Button>
+                        )
+                      );
+                    })()}
                     <Button
                       variant="outline"
                       size="sm"
