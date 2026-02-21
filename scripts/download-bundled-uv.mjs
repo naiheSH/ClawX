@@ -63,11 +63,23 @@ async function setupTarget(id) {
   await fs.ensureDir(tempDir);
 
   try {
-    // Download
+    // Download (with retries for transient CDN errors like 502)
     echo`⬇️ Downloading: ${downloadUrl}`;
-    const response = await fetch(downloadUrl);
-    if (!response.ok) throw new Error(`Failed to download: ${response.statusText}`);
-    const buffer = await response.arrayBuffer();
+    let buffer;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const response = await fetch(downloadUrl);
+      if (response.ok) {
+        buffer = await response.arrayBuffer();
+        break;
+      }
+      if (attempt < 3 && response.status >= 500) {
+        const delay = attempt * 5000;
+        echo(chalk.yellow`   ⚠️ Attempt ${attempt} failed (${response.status}), retrying in ${delay / 1000}s...`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw new Error(`Failed to download: ${response.statusText}`);
+    }
     await fs.writeFile(archivePath, Buffer.from(buffer));
 
     // Extract
