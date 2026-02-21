@@ -805,6 +805,20 @@ function registerProviderHandlers(): void {
     return await getProvider(providerId);
   });
 
+  // Helper: restart Gateway if running so config changes take effect immediately.
+  const restartGatewayIfRunning = (reason: string) => {
+    try {
+      if (gatewayManager.getStatus().state === 'running') {
+        logger.info(`Restarting Gateway: ${reason}`);
+        gatewayManager.restart().catch((err) => {
+          logger.warn(`Gateway restart failed (${reason}):`, err);
+        });
+      }
+    } catch (err) {
+      logger.warn(`Gateway restart check failed (${reason}):`, err);
+    }
+  };
+
   // Save a provider configuration
   ipcMain.handle('provider:save', async (_, config: ProviderConfig, apiKey?: string) => {
     try {
@@ -823,6 +837,7 @@ function registerProviderHandlers(): void {
         }
       }
 
+      restartGatewayIfRunning('provider:save');
       return { success: true };
     } catch (error) {
       return { success: false, error: String(error) };
@@ -844,6 +859,7 @@ function registerProviderHandlers(): void {
         }
       }
 
+      restartGatewayIfRunning('provider:delete');
       return { success: true };
     } catch (error) {
       return { success: false, error: String(error) };
@@ -865,6 +881,7 @@ function registerProviderHandlers(): void {
         console.warn('Failed to save key to OpenClaw auth-profiles:', err);
       }
 
+      restartGatewayIfRunning('provider:setApiKey');
       return { success: true };
     } catch (error) {
       return { success: false, error: String(error) };
@@ -908,6 +925,7 @@ function registerProviderHandlers(): void {
           }
         }
 
+        restartGatewayIfRunning('provider:updateWithKey');
         return { success: true };
       } catch (error) {
         // Best-effort rollback to keep config/key consistent.
@@ -943,6 +961,7 @@ function registerProviderHandlers(): void {
         console.warn('Failed to remove key from OpenClaw auth-profiles:', err);
       }
 
+      restartGatewayIfRunning('provider:deleteApiKey');
       return { success: true };
     } catch (error) {
       return { success: false, error: String(error) };
@@ -995,19 +1014,7 @@ function registerProviderHandlers(): void {
         }
       }
 
-      // Restart Gateway so the new API keys are injected as env vars.
-      // The Gateway may have started before the user configured any keys.
-      try {
-        if (gatewayManager.getStatus().status === 'running') {
-          logger.info('Restarting Gateway after provider:setDefault to inject API keys');
-          gatewayManager.restart().catch((err) => {
-            logger.warn('Gateway restart after setDefault failed:', err);
-          });
-        }
-      } catch (err) {
-        logger.warn('Failed to trigger Gateway restart after setDefault:', err);
-      }
-
+      restartGatewayIfRunning('provider:setDefault');
       return { success: true };
     } catch (error) {
       return { success: false, error: String(error) };

@@ -35,6 +35,26 @@ interface AuthProfilesStore {
 }
 
 /**
+ * Get all agent IDs from openclaw.json config.
+ * Falls back to ['main'] if config cannot be read.
+ */
+function getAllAgentIds(): string[] {
+  try {
+    const configPath = join(homedir(), '.openclaw', 'openclaw.json');
+    if (existsSync(configPath)) {
+      const cfg = JSON.parse(readFileSync(configPath, 'utf-8'));
+      const list = cfg?.agents?.list;
+      if (Array.isArray(list) && list.length > 0) {
+        const ids = list.map((a: { id?: string }) => a.id).filter(Boolean) as string[];
+        if (!ids.includes('main')) ids.unshift('main');
+        return ids;
+      }
+    }
+  } catch { /* ignore */ }
+  return ['main'];
+}
+
+/**
  * Get the path to the auth-profiles.json for a given agent
  */
 function getAuthProfilesPath(agentId = 'main'): string {
@@ -93,39 +113,32 @@ function writeAuthProfiles(store: AuthProfilesStore, agentId = 'main'): void {
 export function saveProviderKeyToOpenClaw(
   provider: string,
   apiKey: string,
-  agentId = 'main'
+  agentId?: string
 ): void {
-  const store = readAuthProfiles(agentId);
-  
-  // Profile ID follows OpenClaw convention: <provider>:default
-  const profileId = `${provider}:default`;
-  
-  // Upsert the profile entry
-  store.profiles[profileId] = {
-    type: 'api_key',
-    provider,
-    key: apiKey,
-  };
-  
-  // Update order to include this profile
-  if (!store.order) {
-    store.order = {};
+  const targets = agentId ? [agentId] : getAllAgentIds();
+
+  for (const id of targets) {
+    const store = readAuthProfiles(id);
+    const profileId = `${provider}:default`;
+
+    store.profiles[profileId] = {
+      type: 'api_key',
+      provider,
+      key: apiKey,
+    };
+
+    if (!store.order) store.order = {};
+    if (!store.order[provider]) store.order[provider] = [];
+    if (!store.order[provider].includes(profileId)) {
+      store.order[provider].push(profileId);
+    }
+
+    if (!store.lastGood) store.lastGood = {};
+    store.lastGood[provider] = profileId;
+
+    writeAuthProfiles(store, id);
+    console.log(`Saved API key for provider "${provider}" to OpenClaw auth-profiles (agent: ${id})`);
   }
-  if (!store.order[provider]) {
-    store.order[provider] = [];
-  }
-  if (!store.order[provider].includes(profileId)) {
-    store.order[provider].push(profileId);
-  }
-  
-  // Set as last good
-  if (!store.lastGood) {
-    store.lastGood = {};
-  }
-  store.lastGood[provider] = profileId;
-  
-  writeAuthProfiles(store, agentId);
-  console.log(`Saved API key for provider "${provider}" to OpenClaw auth-profiles (agent: ${agentId})`);
 }
 
 /**
@@ -133,26 +146,30 @@ export function saveProviderKeyToOpenClaw(
  */
 export function removeProviderKeyFromOpenClaw(
   provider: string,
-  agentId = 'main'
+  agentId?: string
 ): void {
-  const store = readAuthProfiles(agentId);
-  const profileId = `${provider}:default`;
+  const targets = agentId ? [agentId] : getAllAgentIds();
 
-  delete store.profiles[profileId];
+  for (const id of targets) {
+    const store = readAuthProfiles(id);
+    const profileId = `${provider}:default`;
 
-  if (store.order?.[provider]) {
-    store.order[provider] = store.order[provider].filter((id) => id !== profileId);
-    if (store.order[provider].length === 0) {
-      delete store.order[provider];
+    delete store.profiles[profileId];
+
+    if (store.order?.[provider]) {
+      store.order[provider] = store.order[provider].filter((pid) => pid !== profileId);
+      if (store.order[provider].length === 0) {
+        delete store.order[provider];
+      }
     }
-  }
 
-  if (store.lastGood?.[provider] === profileId) {
-    delete store.lastGood[provider];
-  }
+    if (store.lastGood?.[provider] === profileId) {
+      delete store.lastGood[provider];
+    }
 
-  writeAuthProfiles(store, agentId);
-  console.log(`Removed API key for provider "${provider}" from OpenClaw auth-profiles (agent: ${agentId})`);
+    writeAuthProfiles(store, id);
+    console.log(`Removed API key for provider "${provider}" from OpenClaw auth-profiles (agent: ${id})`);
+  }
 }
 
 /**
@@ -408,11 +425,19 @@ export function ensureTokenOptimization(): void {
     changed = true;
   }
 
-  // Ensure compaction safeguard is set
-  if (!defaults.compaction) {
-    defaults.compaction = { mode: 'safeguard' };
+  // Ensure compaction safeguard is set, with memoryFlush DISABLED to prevent
+  // infinite tool-call loops (memory_get → edit → memory_get …) that waste tokens.
+  const compaction = (defaults.compaction || {}) as Record<string, unknown>;
+  if (!compaction.mode) {
+    compaction.mode = 'safeguard';
     changed = true;
   }
+  const memFlush = (compaction.memoryFlush || {}) as Record<string, unknown>;
+  if (memFlush.enabled !== false) {
+    compaction.memoryFlush = { enabled: false };
+    changed = true;
+  }
+  defaults.compaction = compaction;
 
   // Disable block streaming so channels (Feishu, Telegram, etc.) only receive
   // the final combined reply instead of one message per thinking step.
@@ -433,6 +458,41 @@ export function ensureTokenOptimization(): void {
       console.log('[ensureTokenOptimization] Applied token optimization defaults to openclaw.json');
     } catch (err) {
       console.error('[ensureTokenOptimization] Failed to write config:', err);
+    }
+  }
+}
+
+/**
+ * Sync auth.json and models.json from the 'main' agent to all other agents.
+ * The Gateway reads per-agent auth.json / models.json, so if only 'main' has
+ * them, other agents (e.g. 'dev') won't be able to call the LLM.
+ */
+export function syncAgentConfigs(): void {
+  const agentsDir = join(homedir(), '.openclaw', 'agents');
+  const sourceDir = join(agentsDir, 'main', 'agent');
+
+  const filesToSync = ['auth.json', 'models.json'];
+  const agentIds = getAllAgentIds().filter((id) => id !== 'main');
+
+  for (const agentId of agentIds) {
+    const targetDir = join(agentsDir, agentId, 'agent');
+    if (!existsSync(targetDir)) {
+      mkdirSync(targetDir, { recursive: true });
+    }
+
+    for (const file of filesToSync) {
+      const src = join(sourceDir, file);
+      const dst = join(targetDir, file);
+      if (!existsSync(src)) continue;
+
+      try {
+        const srcContent = readFileSync(src, 'utf-8');
+        if (existsSync(dst) && readFileSync(dst, 'utf-8') === srcContent) continue;
+        writeFileSync(dst, srcContent, 'utf-8');
+        console.log(`[syncAgentConfigs] Synced ${file} to agent "${agentId}"`);
+      } catch (err) {
+        console.warn(`[syncAgentConfigs] Failed to sync ${file} to agent "${agentId}":`, err);
+      }
     }
   }
 }

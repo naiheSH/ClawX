@@ -30,7 +30,7 @@ import {
   type DeviceIdentity,
 } from '../utils/device-identity';
 import { ensureRequiredPlugins } from '../utils/plugin-install';
-import { ensureTokenOptimization } from '../utils/openclaw-auth';
+import { ensureTokenOptimization, syncAgentConfigs } from '../utils/openclaw-auth';
 
 /**
  * Gateway connection status
@@ -215,6 +215,8 @@ export class GatewayManager extends EventEmitter {
 
     // Ensure token-optimization config (contextPruning, compaction) before Gateway reads it
     try { ensureTokenOptimization(); } catch { /* non-fatal */ }
+    // Sync auth.json / models.json from main agent to all other agents
+    try { syncAgentConfigs(); } catch { /* non-fatal */ }
 
     // Manual start should override and cancel any pending reconnect timer.
     if (this.reconnectTimer) {
