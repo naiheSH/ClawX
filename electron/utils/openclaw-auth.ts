@@ -450,8 +450,14 @@ export function ensureTokenOptimization(): void {
   }
   defaults.compaction = compaction;
 
-  // Disable block streaming so channels (Feishu, Telegram, etc.) only receive
-  // the final combined reply instead of one message per thinking step.
+  // Suppress verbose tool-call messages on channels (Feishu, Telegram, etc.)
+  // so they only receive the final assistant reply, not intermediate thinking steps.
+  if (defaults.verboseDefault === undefined) {
+    defaults.verboseDefault = 'off';
+    changed = true;
+  }
+
+  // Disable block streaming so channels only receive the final combined reply.
   if (defaults.blockStreamingDefault === undefined) {
     defaults.blockStreamingDefault = 'off';
     changed = true;
