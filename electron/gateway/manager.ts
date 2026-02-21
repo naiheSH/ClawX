@@ -229,23 +229,26 @@ export class GatewayManager extends EventEmitter {
     this.setStatus({ state: 'starting', reconnectAttempts: 0 });
     
     try {
-      // Check if Python environment is ready (self-healing)
-      const pythonReady = await isPythonReady();
-      if (!pythonReady) {
-        logger.info('Python environment missing or incomplete, attempting background repair...');
-        // We don't await this to avoid blocking Gateway startup, 
-        // as uv run will handle it if needed, but this pre-warms it.
-        void setupManagedPython().catch(err => {
-          logger.error('Background Python repair failed:', err);
-        });
-      }
+      // Check if Python environment is ready (self-healing) asynchronously
+      void isPythonReady().then(pythonReady => {
+        if (!pythonReady) {
+          logger.info('Python environment missing or incomplete, attempting background repair...');
+          // We don't await this to avoid blocking Gateway startup, 
+          // as uv run will handle it if needed, but this pre-warms it.
+          void setupManagedPython().catch(err => {
+            logger.error('Background Python repair failed:', err);
+          });
+        }
+      }).catch(err => {
+        logger.error('Failed to check Python environment:', err);
+      });
 
       // Check if Gateway is already running
       logger.debug('Checking for existing Gateway...');
       const existing = await this.findExistingGateway();
       if (existing) {
         logger.debug(`Found existing Gateway on port ${existing.port}`);
-        await this.connect(existing.port);
+        await this.connect(existing.port, existing.externalToken);
         this.ownsProcess = false;
         this.setStatus({ pid: undefined });
         this.startHealthCheck();
@@ -318,33 +321,39 @@ export class GatewayManager extends EventEmitter {
     // Kill process and wait for it to actually exit (so the port is released)
     if (this.process && this.ownsProcess) {
       const child = this.process;
-      this.process = null;
-      logger.info(`Sending SIGTERM to Gateway (pid=${child.pid ?? 'unknown'})`);
-      child.kill('SIGTERM');
-
-      // Wait for the process to exit, with a SIGKILL fallback
+      
       await new Promise<void>((resolve) => {
-        const killTimer = setTimeout(() => {
+        // If process already exited, resolve immediately
+        if (child.exitCode !== null || child.signalCode !== null) {
+          return resolve();
+        }
+        
+        logger.info(`Sending SIGTERM to Gateway (pid=${child.pid ?? 'unknown'})`);
+        child.kill('SIGTERM');
+        
+        // Force kill after timeout
+        const timeout = setTimeout(() => {
           if (child.exitCode === null && child.signalCode === null) {
             logger.warn(`Gateway did not exit in time, sending SIGKILL (pid=${child.pid ?? 'unknown'})`);
-            try { child.kill('SIGKILL'); } catch { /* already dead */ }
+            child.kill('SIGKILL');
           }
-        }, 3000);
-
-        const done = () => {
-          clearTimeout(killTimer);
           resolve();
-        };
+        }, 5000);
 
-        // If the process already exited before we got here
-        if (child.exitCode !== null || child.signalCode !== null) {
-          done();
-          return;
-        }
-        child.once('exit', done);
-        // Safety cap: resolve after 6s even if exit event never fires
-        setTimeout(done, 6000);
+        child.once('exit', () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        
+        child.once('error', () => {
+          clearTimeout(timeout);
+          resolve();
+        });
       });
+      
+      if (this.process === child) {
+        this.process = null;
+      }
     }
     this.ownsProcess = false;
     
@@ -364,18 +373,6 @@ export class GatewayManager extends EventEmitter {
   async restart(): Promise<void> {
     logger.debug('Gateway restart requested');
     await this.stop();
-    // Wait for any in-flight start() to finish unwinding after abort
-    const maxWait = 10;
-    for (let i = 0; i < maxWait && this.startLock; i++) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    if (this.startLock) {
-      logger.warn('Gateway restart: startLock still held after waiting, forcing release');
-      this.startLock = false;
-      this.startAbort = null;
-    }
-    // Brief delay before restart
-    await new Promise(resolve => setTimeout(resolve, 500));
     await this.start();
   }
   
@@ -487,11 +484,46 @@ export class GatewayManager extends EventEmitter {
   /**
    * Find existing Gateway process by attempting a WebSocket connection
    */
-  private async findExistingGateway(): Promise<{ port: number } | null> {
+  private async findExistingGateway(): Promise<{ port: number, externalToken?: string } | null> {
     try {
       const port = PORTS.OPENCLAW_GATEWAY;
+      
+      try {
+        const { stdout } = await new Promise<{ stdout: string }>((resolve) => {
+          import('child_process').then(cp => {
+            cp.exec(`lsof -i :${port} | grep LISTEN`, (err, stdout) => {
+              if (err) resolve({ stdout: '' });
+              else resolve({ stdout });
+            });
+          });
+        });
+        
+        if (stdout.trim()) {
+          // A process is listening on the port
+          const pids = stdout.split('\n')
+            .map(line => line.trim().split(/\s+/)[1])
+            .filter(pid => pid && pid !== 'PID');
+            
+          if (pids.length > 0) {
+            // Try to kill it if it's not us to avoid connection issues
+            // This happens frequently on HMR / dev reloads
+            if (!this.process || !pids.includes(String(this.process.pid))) {
+               logger.info(`Found orphaned process listening on port ${port} (PID: ${pids[0]}), attempting to kill...`);
+               for (const pid of pids) {
+                 try { process.kill(parseInt(pid), 'SIGKILL'); } catch { /* ignore */ }
+               }
+               // Wait a moment for port to be released
+               await new Promise(r => setTimeout(r, 500));
+               return null; // Return null so we start a fresh instance
+            }
+          }
+        }
+      } catch (err) {
+        logger.debug('Error checking for existing process on port:', err);
+      }
+
       // Try a quick WebSocket connection to check if gateway is listening
-      return await new Promise<{ port: number } | null>((resolve) => {
+      return await new Promise<{ port: number, externalToken?: string } | null>((resolve) => {
         const testWs = new WebSocket(`ws://localhost:${port}/ws`);
         const timeout = setTimeout(() => {
           testWs.close();
@@ -717,22 +749,13 @@ export class GatewayManager extends EventEmitter {
   /**
    * Wait for Gateway to be ready by checking if the port is accepting connections
    */
-  private async waitForReady(retries = 600, interval = 1000): Promise<void> {
+  private async waitForReady(retries = 2400, interval = 250): Promise<void> {
+    const child = this.process;
     for (let i = 0; i < retries; i++) {
-      // Abort if stop() was called while we are still waiting
-      if (this.startAbort?.signal.aborted) {
-        logger.info('waitForReady aborted by stop request');
-        throw new Error('Gateway start aborted');
-      }
-
-      // Early exit if the gateway process has already exited (process set to null by exit handler)
-      if (!this.process) {
-        logger.error('Gateway process exited before ready (process=null)');
-        throw new Error('Gateway process exited before becoming ready');
-      }
-      if (this.process.exitCode !== null || this.process.signalCode !== null) {
-        const code = this.process.exitCode;
-        const signal = this.process.signalCode;
+      // Early exit if the gateway process has already exited
+      if (child && (child.exitCode !== null || child.signalCode !== null)) {
+        const code = child.exitCode;
+        const signal = child.signalCode;
         logger.error(`Gateway process exited before ready (${this.formatExit(code, signal)})`);
         throw new Error(`Gateway process exited before becoming ready (${this.formatExit(code, signal)})`);
       }
@@ -779,9 +802,7 @@ export class GatewayManager extends EventEmitter {
   /**
    * Connect WebSocket to Gateway
    */
-  private async connect(port: number): Promise<void> {
-    // Get token for WebSocket authentication
-    const gatewayToken = await getSetting('gatewayToken');
+  private async connect(port: number, _externalToken?: string): Promise<void> {
     logger.debug(`Connecting Gateway WebSocket (ws://localhost:${port}/ws)`);
     
     return new Promise((resolve, reject) => {
@@ -826,6 +847,9 @@ export class GatewayManager extends EventEmitter {
       this.ws.on('open', async () => {
         logger.debug('Gateway WebSocket opened, sending connect handshake');
         
+        // Re-fetch token here before generating payload just in case it updated while connecting
+        const currentToken = await getSetting('gatewayToken');
+        
         // Send proper connect handshake as required by OpenClaw Gateway protocol
         // The Gateway expects: { type: "req", id: "...", method: "connect", params: ConnectParams }
         // Since 2026.2.15, scopes are only granted when a signed device identity is included.
@@ -838,6 +862,7 @@ export class GatewayManager extends EventEmitter {
 
         const device = (() => {
           if (!this.deviceIdentity) return undefined;
+          
           const payload = buildDeviceAuthPayload({
             deviceId: this.deviceIdentity.deviceId,
             clientId,
@@ -845,7 +870,7 @@ export class GatewayManager extends EventEmitter {
             role,
             scopes,
             signedAtMs,
-            token: gatewayToken ?? null,
+            token: currentToken ?? null,
           });
           const signature = signDevicePayload(this.deviceIdentity.privateKeyPem, payload);
           return {
@@ -871,7 +896,7 @@ export class GatewayManager extends EventEmitter {
               mode: clientMode,
             },
             auth: {
-              token: gatewayToken,
+              token: currentToken,
             },
             caps: [],
             role,
@@ -1113,7 +1138,7 @@ export class GatewayManager extends EventEmitter {
         // Try to find existing Gateway first
         const existing = await this.findExistingGateway();
         if (existing) {
-          await this.connect(existing.port);
+          await this.connect(existing.port, existing.externalToken);
           this.ownsProcess = false;
           this.setStatus({ pid: undefined });
           this.reconnectAttempts = 0;
